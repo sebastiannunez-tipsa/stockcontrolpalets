@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>StockControl Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0c12;--surface:#12151f;--surface2:#1a1e2e;--surface3:#222738;--border:#2a2f45;--accent:#e3261e;--green:#00e5a0;--yellow:#ffd166;--blue:#4cc9f0;--text:#e8eaf6;--text2:#8892b0;--text3:#4a5272;--font-main:'Syne',sans-serif;--font-mono:'JetBrains Mono',monospace;--radius:12px;--radius-sm:8px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:var(--font-main);min-height:100vh;overflow-x:hidden}
+#loading-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px}
+.loader-logo{font-size:28px;font-weight:800;letter-spacing:-0.5px}.loader-logo span{color:var(--accent)}
+.spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading-screen p{color:var(--text2);font-size:13px;font-family:var(--font-mono)}
+#loading-error{color:var(--accent);font-size:13px;font-family:var(--font-mono);text-align:center;max-width:360px;line-height:1.7;display:none}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);transition:background .3s;flex-shrink:0}
+.sync-dot.connected{background:var(--green);box-shadow:0 0 6px var(--green)}
+.sync-dot.syncing{background:var(--yellow);animation:pulse .8s infinite}
+.sync-dot.error{background:var(--accent)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.app{display:flex;min-height:100vh}
+.sidebar{width:240px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.sidebar-logo{padding:24px 20px 20px;border-bottom:1px solid var(--border)}
+.sidebar-logo h1{font-size:18px;font-weight:800;letter-spacing:-0.5px}.sidebar-logo h1 span{color:var(--accent)}
+.sidebar-logo small{display:block;font-family:var(--font-mono);font-size:10px;color:var(--text3);margin-top:2px}
+.nav{flex:1;padding:16px 12px;overflow-y:auto}
+.nav-section-title{font-family:var(--font-mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px;padding:8px 8px 6px;margin-top:8px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);cursor:pointer;color:var(--text2);font-size:14px;font-weight:600;transition:all .2s;margin-bottom:2px;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--surface2);color:var(--text)}.nav-item.active{background:var(--accent);color:white}
+.nav-item .icon{width:18px;text-align:center;font-size:16px}
+.nav-badge{margin-left:auto;background:var(--surface3);color:var(--text2);font-family:var(--font-mono);font-size:10px;padding:2px 6px;border-radius:20px}
+.nav-item.active .nav-badge{background:rgba(255,255,255,.2);color:white}
+.sidebar-footer{padding:14px 16px;border-top:1px solid var(--border);font-family:var(--font-mono);font-size:11px;color:var(--text3)}
+.main{flex:1;margin-left:240px;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;height:60px;display:flex;align-items:center;gap:16px;position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:800;flex:1}
+.topbar-search{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;color:var(--text);font-family:var(--font-main);font-size:14px;width:220px;outline:none;transition:border-color .2s}
+.topbar-search:focus{border-color:var(--accent)}.topbar-search::placeholder{color:var(--text3)}
+.content{padding:24px;flex:1}.page{display:none}.page.active{display:block}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.stat-card.s-red::before{background:var(--accent)}.stat-card.s-green::before{background:var(--green)}
+.stat-card.s-blue::before{background:var(--blue)}.stat-card.s-yellow::before{background:var(--yellow)}
+.stat-label{font-size:11px;color:var(--text3);font-family:var(--font-mono);text-transform:uppercase;letter-spacing:1px}
+.stat-value{font-size:32px;font-weight:800;margin:8px 0 4px;line-height:1}.stat-sub{font-size:12px;color:var(--text2)}
+.stat-icon{position:absolute;right:16px;top:16px;font-size:28px;opacity:.15}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+.card-title{font-size:15px;font-weight:700;flex:1}
+table{width:100%;border-collapse:collapse}
+th{background:var(--surface2);color:var(--text3);font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:12px 16px;text-align:left;border-bottom:1px solid var(--border)}
+td{padding:12px 16px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
+tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:var(--font-mono)}
+.badge-green{background:rgba(0,229,160,.15);color:var(--green)}.badge-red{background:rgba(227,38,30,.15);color:var(--accent)}
+.badge-yellow{background:rgba(255,209,102,.15);color:var(--yellow)}.badge-blue{background:rgba(76,201,240,.15);color:var(--blue)}
+.stock-bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
+.stock-bar-fill{height:100%;border-radius:3px;transition:width .5s}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:slideUp .3s ease}
+@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center}
+.modal-title{font-size:17px;font-weight:800;flex:1}
+.modal-body{padding:24px}.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px;justify-content:flex-end}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;font-family:var(--font-mono)}
+.form-control{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;color:var(--text);font-family:var(--font-main);font-size:14px;outline:none;transition:border-color .2s}
+.form-control:focus{border-color:var(--accent)}select.form-control option{background:var(--surface2)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mov-type-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px}
+.mov-tab{padding:14px;border-radius:var(--radius-sm);border:2px solid var(--border);background:none;color:var(--text2);font-family:var(--font-main);font-weight:700;font-size:14px;cursor:pointer;transition:all .2s;text-align:center}
+.mov-tab.active-in{border-color:var(--green);background:rgba(0,229,160,.1);color:var(--green)}
+.mov-tab.active-out{border-color:var(--accent);background:rgba(227,38,30,.1);color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-sm);font-family:var(--font-main);font-size:13px;font-weight:700;cursor:pointer;border:none;transition:all .2s}
+.btn-primary{background:var(--accent);color:white}.btn-primary:hover{background:#c51e17}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{background:var(--surface3)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
+.history-item{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--border)}
+.history-item:last-child{border-bottom:none}
+.hist-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.hist-dot.entrada{background:rgba(0,229,160,.15)}.hist-dot.salida{background:rgba(227,38,30,.15)}
+.hist-info{flex:1}.hist-ref{font-weight:700;font-size:14px}.hist-detail{font-size:12px;color:var(--text2);margin-top:2px}
+.hist-qty{font-family:var(--font-mono);font-weight:700;font-size:16px}
+.hist-qty.entrada{color:var(--green)}.hist-qty.salida{color:var(--accent)}
+.hist-time{font-family:var(--font-mono);font-size:11px;color:var(--text3);text-align:right}
+.inv-status{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
+.inv-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--surface2);border-radius:20px;font-size:12px;font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%}
+.alert-banner{background:rgba(255,209,102,.1);border:1px solid rgba(255,209,102,.3);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;font-size:13px}
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}.empty-state .icon{font-size:48px;margin-bottom:16px}.empty-state p{font-size:14px}
+.mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:100;padding:8px 0 env(safe-area-inset-bottom)}
+.mobile-nav-items{display:grid;grid-template-columns:repeat(5,1fr)}
+.mobile-nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px;cursor:pointer;color:var(--text3);font-size:10px;font-weight:600;border:none;background:none;transition:color .2s}
+.mobile-nav-item .icon{font-size:20px}.mobile-nav-item.active{color:var(--accent)}
+.mobile-topbar{display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;position:sticky;top:0;z-index:50;align-items:center;gap:10px}
+.mobile-topbar .page-name{font-size:18px;font-weight:800;flex:1}
+.mobile-fab{position:fixed;bottom:90px;right:20px;width:56px;height:56px;background:var(--accent);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:26px;cursor:pointer;box-shadow:0 4px 20px rgba(227,38,30,.5);z-index:99;border:none;color:white;transition:transform .2s}
+.mobile-fab:active{transform:scale(.9)}
+.toast-container{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{background:var(--surface3);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 20px;font-size:13px;font-weight:600;animation:toastIn .3s ease;white-space:nowrap}
+.toast.success{border-color:var(--green);color:var(--green)}.toast.error{border-color:var(--accent);color:var(--accent)}.toast.info{border-color:var(--blue);color:var(--blue)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:768px){
+  .sidebar{display:none}.main{margin-left:0}.topbar{display:none}
+  .mobile-topbar{display:flex}.mobile-nav{display:block}.mobile-fab{display:flex}
+  .content{padding:16px;padding-bottom:100px}.stats-grid{grid-template-columns:1fr 1fr;gap:10px}
+  .stat-value{font-size:24px}.charts-row{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}
+  th{display:none}td{display:flex;align-items:center;padding:10px 14px}
+  td::before{content:attr(data-label);font-size:10px;color:var(--text3);font-family:var(--font-mono);width:90px;flex-shrink:0}
+  table,tbody,tr{display:block}tr{border-bottom:1px solid var(--border)}.toast-container{bottom:100px}
+}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px}
+@media print{.sidebar,.topbar,.mobile-nav,.mobile-topbar,.mobile-fab,.btn{display:none!important}.main{margin-left:0}body{background:white;color:black}.card{border:1px solid #ccc}}
+</style>
+</head>
+<body>
+<div id="loading-screen">
+  <div class="loader-logo">Stock<span>Control</span> Pro</div>
+  <div class="spinner"></div>
+  <p id="loading-msg">Conectando con Firebase...</p>
+  <div id="loading-error"></div>
+</div>
+
+<div class="app" id="app-screen" style="display:none">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Stock<span>Control</span> Pro</h1>
+      <small id="warehouse-name-label">ALMACÉN</small>
+    </div>
+    <nav class="nav">
+      <div class="nav-section-title">Principal</div>
+      <button class="nav-item active" onclick="navigate('dashboard')"><span class="icon">📊</span>Dashboard</button>
+      <button class="nav-item" onclick="navigate('referencias')"><span class="icon">📦</span>Referencias<span class="nav-badge" id="nav-ref-count">0</span></button>
+      <button class="nav-item" onclick="navigate('movimientos')"><span class="icon">🔄</span>Movimientos<span class="nav-badge" id="nav-mov-count">0</span></button>
+      <div class="nav-section-title">Inventario</div>
+      <button class="nav-item" onclick="navigate('inventario')"><span class="icon">🗂️</span>Inventario</button>
+      <button class="nav-item" onclick="navigate('alertas')"><span class="icon">⚠️</span>Alertas<span class="nav-badge" id="nav-alert-count" style="background:rgba(227,38,30,.2);color:var(--accent)">0</span></button>
+      <div class="nav-section-title">Sistema</div>
+      <button class="nav-item" onclick="navigate('configuracion')"><span class="icon">⚙️</span>Configuración</button>
+    </nav>
+    <div class="sidebar-footer">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+        <span class="sync-dot connected" id="sync-dot"></span>
+        <span id="sync-text" style="font-size:11px">Sincronizado</span>
+      </div>
+      <div id="sidebar-date" style="font-size:10px"></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+      <input type="text" class="topbar-search" placeholder="🔍 Buscar referencia..." oninput="globalSearch(this.value)">
+      <button class="btn btn-primary" onclick="openMovModal()">+ Movimiento</button>
+    </div>
+    <div class="mobile-topbar">
+      <span class="page-name" id="mobile-title">Dashboard</span>
+      <div style="display:flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;color:var(--text3)">
+        <span class="sync-dot connected" id="sync-dot-mobile"></span>
+        <span id="sync-text-mobile">OK</span>
+      </div>
+    </div>
+    <div class="content">
+
+      <div class="page active" id="page-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card s-blue"><div class="stat-icon">📦</div><div class="stat-label">Referencias</div><div class="stat-value" id="stat-refs">—</div><div class="stat-sub">Referencias activas</div></div>
+          <div class="stat-card s-green"><div class="stat-icon">⬇️</div><div class="stat-label">Entradas Hoy</div><div class="stat-value" id="stat-in">—</div><div class="stat-sub">Unidades recibidas</div></div>
+          <div class="stat-card s-red"><div class="stat-icon">⬆️</div><div class="stat-label">Salidas Hoy</div><div class="stat-value" id="stat-out">—</div><div class="stat-sub">Unidades despachadas</div></div>
+          <div class="stat-card s-yellow"><div class="stat-icon">⚠️</div><div class="stat-label">Stock Bajo</div><div class="stat-value" id="stat-low">—</div><div class="stat-sub">Refs bajo mínimo</div></div>
+        </div>
+        <div id="low-stock-banner"></div>
+        <div class="charts-row">
+          <div class="card"><div class="card-header"><span class="card-title">Últimos movimientos</span></div><div id="dashboard-movements"></div></div>
+          <div class="card"><div class="card-header"><span class="card-title">Top Stock</span></div><div id="dashboard-top-stock"></div></div>
+        </div>
+      </div>
+
+      <div class="page" id="page-referencias">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="🔍 Filtrar..." id="ref-filter" oninput="rRefs()">
+          <select class="form-control" style="width:160px" id="ref-cat-filter" onchange="rRefs()"><option value="">Todas las categorías</option></select>
+          <button class="btn btn-primary" onclick="openRefModal()">+ Nueva Referencia</button>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Catálogo de Referencias</span><span class="badge badge-blue" id="ref-count-badge">0 refs</span></div>
+          <table><thead><tr><th>Código</th><th>Descripción</th><th>Categoría</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody id="refs-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <div class="page" id="page-movimientos">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <select class="form-control" style="width:140px" id="mov-type-filter" onchange="rMovs()"><option value="">Todos</option><option value="entrada">Entradas</option><option value="salida">Salidas</option></select>
+          <select class="form-control" style="width:160px" id="mov-ref-filter" onchange="rMovs()"><option value="">Todas las refs</option></select>
+          <input type="date" class="form-control" style="width:160px" id="mov-date-filter" onchange="rMovs()">
+          <button class="btn btn-ghost btn-sm" onclick="clearMovFilters()">✕ Limpiar</button>
+          <button class="btn btn-primary" style="margin-left:auto" onclick="openMovModal()">+ Movimiento</button>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Historial de Movimientos</span><button class="btn btn-ghost btn-sm" onclick="exportCSV()">📥 CSV</button></div>
+          <div id="movs-list"></div>
+        </div>
+      </div>
+
+      <div class="page" id="page-inventario">
+        <div class="inv-status" id="inv-status-chips"></div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Estado del Inventario</span><button class="btn btn-ghost btn-sm" onclick="window.print()">🖨️ Imprimir</button></div>
+          <table><thead><tr><th>Referencia</th><th>Descripción</th><th>Categoría</th><th>Stock</th><th>Mínimo</th><th>Nivel</th><th>Últ. Movimiento</th></tr></thead><tbody id="inv-tbody"></tbody></table>
+        </div>
+      </div>
+
+      <div class="page" id="page-alertas">
+        <div class="card"><div class="card-header"><span class="card-title">⚠️ Alertas de Stock</span></div><div id="alerts-body"></div></div>
+      </div>
+
+      <div class="page" id="page-configuracion">
+        <div class="card" style="max-width:500px">
+          <div class="card-header"><span class="card-title">⚙️ Configuración</span></div>
+          <div style="padding:24px">
+            <div class="form-group"><label class="form-label">Nombre del Almacén</label><input class="form-control" id="cfg-warehouse-name" oninput="saveConfig()"></div>
+            <div class="form-group"><label class="form-label">Stock mínimo por defecto</label><input class="form-control" type="number" id="cfg-min-stock" value="5" oninput="saveConfig()"></div>
+            <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px">
+              <div style="font-size:11px;color:var(--text3);font-family:var(--font-mono);margin-bottom:12px">🔥 Firebase: app-stock-88c6a · europe-west1</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onclick="exportCSV()">📥 Exportar CSV</button>
+                <button class="btn btn-ghost btn-sm" onclick="exportJSON()">📥 Backup JSON</button>
+                <button class="btn btn-sm" style="background:rgba(227,38,30,.15);color:var(--accent);border:1px solid rgba(227,38,30,.3)" onclick="clearAllData()">🗑️ Borrar datos</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<nav class="mobile-nav">
+  <div class="mobile-nav-items">
+    <button class="mobile-nav-item active" onclick="navigate('dashboard')" id="mn-dashboard"><span class="icon">📊</span><span>Inicio</span></button>
+    <button class="mobile-nav-item" onclick="navigate('referencias')" id="mn-referencias"><span class="icon">📦</span><span>Refs</span></button>
+    <button class="mobile-nav-item" onclick="navigate('movimientos')" id="mn-movimientos"><span class="icon">🔄</span><span>Movs</span></button>
+    <button class="mobile-nav-item" onclick="navigate('inventario')" id="mn-inventario"><span class="icon">🗂️</span><span>Stock</span></button>
+    <button class="mobile-nav-item" onclick="navigate('alertas')" id="mn-alertas"><span class="icon">⚠️</span><span>Alertas</span></button>
+  </div>
+</nav>
+<button class="mobile-fab" onclick="openMovModal()">＋</button>
+
+<div class="modal-overlay" id="modal-mov">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title" id="mov-modal-title">Registrar Movimiento</span><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-mov')">✕</button></div>
+    <div class="modal-body">
+      <div class="mov-type-tabs">
+        <button class="mov-tab active-in" id="tab-in" onclick="setMovType('entrada')">⬇️ ENTRADA</button>
+        <button class="mov-tab" id="tab-out" onclick="setMovType('salida')">⬆️ SALIDA</button>
+      </div>
+      <div class="form-group"><label class="form-label">Referencia *</label><select class="form-control" id="mov-ref" onchange="updateStockPreview()"><option value="">Seleccionar...</option></select></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Cantidad *</label><input class="form-control" type="number" id="mov-qty" min="1" value="1" oninput="updateStockPreview()"></div>
+        <div class="form-group"><label class="form-label">Fecha</label><input class="form-control" type="date" id="mov-date"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Nº Albarán / Lote</label><input class="form-control" id="mov-doc" placeholder="Opcional"></div>
+      <div class="form-group"><label class="form-label">Observaciones</label><textarea class="form-control" id="mov-notes" rows="2" placeholder="Opcional"></textarea></div>
+      <div id="mov-stock-preview" style="background:var(--surface2);border-radius:var(--radius-sm);padding:12px;font-size:13px;display:none"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-mov')">Cancelar</button><button class="btn btn-primary" onclick="saveMovement()">Guardar</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-ref">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title" id="ref-modal-title">Nueva Referencia</span><button class="btn btn-ghost btn-sm" onclick="closeModal('modal-ref')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Código *</label><input class="form-control" id="ref-code" placeholder="REF-001" style="font-family:var(--font-mono)"></div>
+        <div class="form-group"><label class="form-label">Categoría</label><input class="form-control" id="ref-cat" placeholder="General" list="cat-list"><datalist id="cat-list"></datalist></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción *</label><input class="form-control" id="ref-desc" placeholder="Descripción del producto"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Stock Inicial</label><input class="form-control" type="number" id="ref-stock" min="0" value="0"></div>
+        <div class="form-group"><label class="form-label">Stock Mínimo</label><input class="form-control" type="number" id="ref-min" min="0" value="5"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Ubicación</label><input class="form-control" id="ref-loc" placeholder="Estantería A-1"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('modal-ref')">Cancelar</button><button class="btn btn-primary" onclick="saveRef()">Guardar</button></div>
+  </div>
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import{getDatabase,ref,set,push,onValue,remove,update,get}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+const FB={apiKey:"AIzaSyDx3dBQIcaZecwLxKLVgEKpGxbxX-PFL5Y",authDomain:"app-stock-88c6a.firebaseapp.com",databaseURL:"https://app-stock-88c6a-default-rtdb.europe-west1.firebasedatabase.app",projectId:"app-stock-88c6a",storageBucket:"app-stock-88c6a.firebasestorage.app",messagingSenderId:"436767882861",appId:"1:436767882861:web:f1d9f02b72c25cb86f4964"};
+
+let fdb,R={},M={},C={name:'Mi Almacén',defaultMin:5},editId=null,editMovId=null,movType='entrada',curPage='dashboard',ready=false,rOk=false,mOk=false;
+
+async function init(){
+  const lmsg=document.getElementById('loading-msg');
+  // Mensajes progresivos para que no parezca congelado
+  const msgs=['Conectando con Firebase...','Cargando datos...','Casi listo...','Iniciando modo local...'];
+  msgs.forEach((m,i)=>setTimeout(()=>{if(!ready&&lmsg)lmsg.textContent=m},i*2000));
+  // Fallback: si en 7s no conectó, arranca en modo local sin Firebase
+  const fallback=setTimeout(()=>{
+    if(!ready){setSS('error','Sin conexión');launch();}
+  },7000);
+  try{
+    const app=initializeApp(FB);
+    fdb=getDatabase(app);
+    onValue(ref(fdb,'.info/connected'),s=>{setSS(s.val()?'connected':'error',s.val()?'Sincronizado':'Sin conexión')});
+    onValue(ref(fdb,'refs'),s=>{R=s.val()||{};badges();renderNow();if(!rOk){rOk=true;check()}});
+    onValue(ref(fdb,'movements'),s=>{M=s.val()||{};badges();renderNow();if(!mOk){mOk=true;check()}});
+    onValue(ref(fdb,'config'),s=>{if(s.val()){C={...C,...s.val()};const e=document.getElementById('warehouse-name-label');if(e)e.textContent=C.name}});
+  }catch(e){
+    clearTimeout(fallback);
+    setSS('error','Sin conexión');
+    launch();
+  }
+}
+
+function check(){if(rOk&&mOk)launch()}
+function launch(){if(ready)return;ready=true;document.getElementById('loading-screen').style.display='none';document.getElementById('app-screen').style.display='flex';document.getElementById('sidebar-date').textContent='📅 '+new Date().toLocaleDateString('es-ES',{weekday:'short',day:'2-digit',month:'short'});renderNow()}
+
+function setSS(s,t){['sync-dot','sync-dot-mobile'].forEach(id=>{const e=document.getElementById(id);if(e)e.className='sync-dot '+s});const a=document.getElementById('sync-text'),b=document.getElementById('sync-text-mobile');if(a)a.textContent=t;if(b)b.textContent=t}
+async function fw(p,d){setSS('syncing','Guardando...');await set(ref(fdb,p),d);setSS('connected','Sincronizado')}
+async function fp(p,d){setSS('syncing','Guardando...');const r=await push(ref(fdb,p),d);setSS('connected','Sincronizado');return r.key}
+async function fu(p,d){setSS('syncing','Guardando...');await update(ref(fdb,p),d);setSS('connected','Sincronizado')}
+async function fr(p){setSS('syncing','...');await remove(ref(fdb,p));setSS('connected','Sincronizado')}
+
+const ra=()=>Object.entries(R).map(([id,r])=>({id,...r}));
+const ma=()=>Object.entries(M).map(([id,m])=>({id,...m}));
+const pages=['dashboard','referencias','movimientos','inventario','alertas','configuracion'];
+const titles={dashboard:'Dashboard',referencias:'Referencias',movimientos:'Movimientos',inventario:'Inventario',alertas:'Alertas de Stock',configuracion:'Configuración'};
+
+window.navigate=p=>{
+  pages.forEach(x=>{document.getElementById('page-'+x)?.classList.remove('active');document.querySelector('.nav-item[onclick="navigate(\''+x+'\')"]')?.classList.remove('active');document.getElementById('mn-'+x)?.classList.remove('active')});
+  curPage=p;document.getElementById('page-'+p)?.classList.add('active');
+  document.querySelector('.nav-item[onclick="navigate(\''+p+'\')"]')?.classList.add('active');
+  document.getElementById('mn-'+p)?.classList.add('active');
+  document.getElementById('topbar-title').textContent=titles[p];document.getElementById('mobile-title').textContent=titles[p];rp(p)};
+
+function renderNow(){if(ready)rp(curPage)}
+function rp(p){if(p==='dashboard')rDash();else if(p==='referencias')rRefs();else if(p==='movimientos')rMovs();else if(p==='inventario')rInv();else if(p==='alertas')rAlerts();else if(p==='configuracion')rCfg()}
+
+function badges(){const lo=ra().filter(r=>r.stock<0).length;document.getElementById('nav-ref-count').textContent=ra().length;document.getElementById('nav-mov-count').textContent=ma().length;document.getElementById('nav-alert-count').textContent=lo}
+
+function sbadge(r){if(r.stock<0)return'<span class="badge badge-red">⚠ NEGATIVO</span>';if(r.stock===0)return'<span class="badge badge-red">SIN STOCK</span>';return'<span class="badge badge-green">OK</span>'}
+
+function hHTML(m){const r=ra().find(x=>x.id===m.refId);return`<div class="history-item" style="cursor:default"><div class="hist-dot ${m.type}">${m.type==='entrada'?'⬇️':'⬆️'}</div><div class="hist-info"><div class="hist-ref">${r?r.code:'?'}</div><div class="hist-detail">${r?r.desc:''} ${m.doc?'· '+m.doc:''}</div></div><div style="display:flex;align-items:center;gap:8px"><div><div class="hist-qty ${m.type}">${m.type==='entrada'?'+':'-'}${m.qty}</div><div class="hist-time">${m.date}</div></div><div style="display:flex;flex-direction:column;gap:4px"><button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:12px" onclick="editMov('${m.id}')">✏️</button><button class="btn btn-sm" style="padding:3px 8px;font-size:12px;background:rgba(227,38,30,.15);color:var(--accent)" onclick="deleteMov('${m.id}')">🗑️</button></div></div></div>`}
+
+function rDash(){
+  const today=new Date().toISOString().slice(0,10),tm=ma().filter(m=>m.date===today);
+  const en=tm.filter(m=>m.type==='entrada').reduce((s,m)=>s+Number(m.qty),0);
+  const sa=tm.filter(m=>m.type==='salida').reduce((s,m)=>s+Number(m.qty),0);
+  const lo=ra().filter(r=>r.stock<=r.minStock);
+  document.getElementById('stat-refs').textContent=ra().length;
+  document.getElementById('stat-in').textContent=en;
+  document.getElementById('stat-out').textContent=sa;
+  document.getElementById('stat-low').textContent=lo.length;
+  document.getElementById('low-stock-banner').innerHTML=lo.length>0?`<div class="alert-banner">⚠️ <strong>${lo.length} referencia(s)</strong> con stock bajo: ${lo.slice(0,3).map(r=>r.code).join(', ')}${lo.length>3?'...':''}</div>`:'';
+  const last=[...ma()].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,8);
+  document.getElementById('dashboard-movements').innerHTML=last.length?last.map(m=>hHTML(m)).join(''):'<div class="empty-state"><div class="icon">📭</div><p>Sin movimientos aún</p></div>';
+  const top=[...ra()].sort((a,b)=>b.stock-a.stock).slice(0,6),mx=top[0]?.stock||1;
+  document.getElementById('dashboard-top-stock').innerHTML=top.length?`<div style="padding:16px">${top.map(r=>`<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px"><span style="font-weight:700;font-family:var(--font-mono)">${r.code}</span><span style="color:${r.stock<0?'var(--accent)':'var(--green)'};font-weight:700">${r.stock}</span></div><div class="stock-bar"><div class="stock-bar-fill" style="width:${Math.min(100,(r.stock/mx)*100)}%;background:${r.stock<0?'var(--accent)':'var(--green)'}"></div></div></div>`).join('')}</div>`:'<div class="empty-state"><div class="icon">📦</div><p>Sin referencias</p></div>'
+}
+
+function rRefs(){
+  const f=(document.getElementById('ref-filter')?.value||'').toLowerCase(),cf=document.getElementById('ref-cat-filter')?.value||'';
+  const cats=[...new Set(ra().map(r=>r.cat).filter(Boolean))];
+  const sel=document.getElementById('ref-cat-filter'),prev=sel.value;
+  sel.innerHTML='<option value="">Todas las categorías</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');sel.value=prev;
+  document.getElementById('cat-list').innerHTML=cats.map(c=>`<option value="${c}">`).join('');
+  const fl=ra().filter(r=>(!f||r.code.toLowerCase().includes(f)||r.desc.toLowerCase().includes(f))&&(!cf||r.cat===cf));
+  document.getElementById('ref-count-badge').textContent=fl.length+' refs';
+  document.getElementById('refs-tbody').innerHTML=fl.length?fl.map(r=>`<tr><td data-label="Código"><span style="font-family:var(--font-mono);font-weight:700">${r.code}</span></td><td data-label="Descripción">${r.desc}</td><td data-label="Categoría"><span class="badge badge-blue">${r.cat||'-'}</span></td><td data-label="Stock" style="font-family:var(--font-mono);font-weight:700;color:${r.stock<0?'var(--accent)':r.stock===0?'var(--yellow)':'var(--green)'}">${r.stock}</td><td data-label="Mínimo" style="font-family:var(--font-mono)">${r.minStock}</td><td data-label="Estado">${sbadge(r)}</td><td data-label="Acciones"><div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="openMovModalForRef('${r.id}')">+/-</button><button class="btn btn-ghost btn-sm" onclick="editRef('${r.id}')">✏️</button><button class="btn btn-sm" style="background:rgba(227,38,30,.15);color:var(--accent)" onclick="deleteRef('${r.id}')">🗑️</button></div></td></tr>`).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:40px">Sin referencias</td></tr>`
+}
+
+window.openRefModal=id=>{
+  editId=id||null;document.getElementById('ref-modal-title').textContent=id?'Editar Referencia':'Nueva Referencia';
+  if(id){const r=R[id];document.getElementById('ref-code').value=r.code;document.getElementById('ref-desc').value=r.desc;document.getElementById('ref-cat').value=r.cat||'';document.getElementById('ref-stock').value=r.stock;document.getElementById('ref-min').value=r.minStock;document.getElementById('ref-loc').value=r.loc||'';document.getElementById('ref-stock').disabled=true}
+  else{['ref-code','ref-desc','ref-cat','ref-loc'].forEach(x=>document.getElementById(x).value='');document.getElementById('ref-stock').value='0';document.getElementById('ref-min').value=C.defaultMin||5;document.getElementById('ref-stock').disabled=false}
+  openModal('modal-ref')};
+
+window.editRef=id=>openRefModal(id);
+
+window.saveRef=async()=>{
+  const code=document.getElementById('ref-code').value.trim(),desc=document.getElementById('ref-desc').value.trim();
+  if(!code||!desc){toast('Código y descripción obligatorios','error');return}
+  if(editId){
+    if(ra().find(r=>r.code===code&&r.id!==editId)){toast('Código ya existe','error');return}
+    await fu('refs/'+editId,{code,desc,cat:document.getElementById('ref-cat').value.trim()||'General',minStock:parseInt(document.getElementById('ref-min').value)||0,loc:document.getElementById('ref-loc').value.trim()});
+    toast('Referencia actualizada ✅','success')
+  }else{
+    if(ra().find(r=>r.code===code)){toast('Código ya existe','error');return}
+    const stock=parseInt(document.getElementById('ref-stock').value)||0;
+    const nid=await fp('refs',{code,desc,cat:document.getElementById('ref-cat').value.trim()||'General',stock,minStock:parseInt(document.getElementById('ref-min').value)||0,loc:document.getElementById('ref-loc').value.trim(),createdAt:new Date().toISOString()});
+    if(stock>0)await fp('movements',{refId:nid,type:'entrada',qty:stock,date:new Date().toISOString().slice(0,10),doc:'Stock inicial',notes:'',createdAt:new Date().toISOString()});
+    toast('Referencia creada ✅','success')
+  }
+  closeModal('modal-ref')};
+
+window.deleteRef=async id=>{if(!confirm('¿Eliminar referencia y sus movimientos?'))return;await fr('refs/'+id);for(const[k,m]of Object.entries(M)){if(m.refId===id)await fr('movements/'+k)}toast('Eliminada','error')};
+
+window.openMovModal=()=>{
+  editMovId=null;document.getElementById('mov-modal-title').textContent='Registrar Movimiento';
+  setMovType('entrada');['mov-doc','mov-notes'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('mov-qty').value='1';document.getElementById('mov-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('mov-stock-preview').style.display='none';
+  document.getElementById('mov-ref').innerHTML='<option value="">Seleccionar referencia...</option>'+ra().map(r=>`<option value="${r.id}">${r.code} – ${r.desc} (Stock: ${r.stock})</option>`).join('');
+  openModal('modal-mov')};
+
+window.openMovModalForRef=rid=>{openMovModal();document.getElementById('mov-ref').value=rid;updateStockPreview()};
+
+window.setMovType=t=>{movType=t;document.getElementById('tab-in').className='mov-tab'+(t==='entrada'?' active-in':'');document.getElementById('tab-out').className='mov-tab'+(t==='salida'?' active-out':'');updateStockPreview()};
+
+window.updateStockPreview=()=>{const rid=document.getElementById('mov-ref').value,qty=parseInt(document.getElementById('mov-qty').value)||0,prev=document.getElementById('mov-stock-preview');if(!rid){prev.style.display='none';return}const r=R[rid];if(!r)return;const after=movType==='entrada'?r.stock+qty:r.stock-qty;prev.style.display='block';prev.innerHTML=`<b>Stock actual:</b> ${r.stock} → <b style="color:${after<0?'var(--accent)':after===0?'var(--yellow)':'var(--green)'}">Nuevo: ${after}</b>${after<0?' 📋 Quedará en negativo (deuda)':''}`};
+
+window.saveMovement=async()=>{
+  const rid=document.getElementById('mov-ref').value,qty=parseInt(document.getElementById('mov-qty').value)||0,date=document.getElementById('mov-date').value;
+  if(!rid){toast('Selecciona una referencia','error');return}if(qty<=0){toast('Cantidad inválida','error');return}
+  const doc=document.getElementById('mov-doc').value.trim(),notes=document.getElementById('mov-notes').value.trim();
+  if(editMovId){
+    // EDICIÓN: revertir efecto del movimiento original, luego aplicar el nuevo
+    const old=M[editMovId];
+    if(!old){toast('Movimiento no encontrado','error');return}
+    // Paso 1 — revertir stock de la referencia original
+    const oldRef=R[old.refId];
+    let stockAfterRevert=oldRef?oldRef.stock:0;
+    if(oldRef){
+      stockAfterRevert=old.type==='entrada'?oldRef.stock-old.qty:oldRef.stock+old.qty;
+      await fu('refs/'+old.refId,{stock:stockAfterRevert});
+    }
+    // Paso 2 — aplicar nuevo movimiento en la referencia nueva (puede ser la misma)
+    const targetRef=R[rid];
+    // Si es la misma ref, el stock ya fue actualizado en el paso anterior
+    const baseStock=old.refId===rid?stockAfterRevert:(targetRef?targetRef.stock:0);
+    // Stock negativo permitido — se registra la deuda
+    const newStock=movType==='entrada'?baseStock+qty:baseStock-qty;
+    await fu('refs/'+rid,{stock:newStock});
+    await fu('movements/'+editMovId,{refId:rid,type:movType,qty,date,doc,notes,createdAt:old.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    closeModal('modal-mov');toast('Movimiento actualizado ✅','success');
+  } else {
+    // NUEVO movimiento
+    const r=R[rid];// Stock negativo permitido — se registra la deuda
+    await fu('refs/'+rid,{stock:movType==='entrada'?r.stock+qty:r.stock-qty});
+    await fp('movements',{refId:rid,type:movType,qty,date,doc,notes,createdAt:new Date().toISOString()});
+    closeModal('modal-mov');toast((movType==='entrada'?'Entrada':'Salida')+' registrada ✅','success');
+  }};
+
+function rMovs(){
+  const tf=document.getElementById('mov-type-filter')?.value||'',rf=document.getElementById('mov-ref-filter')?.value||'',df=document.getElementById('mov-date-filter')?.value||'';
+  const sel=document.getElementById('mov-ref-filter'),prev=sel.value;
+  sel.innerHTML='<option value="">Todas las refs</option>'+ra().map(r=>`<option value="${r.id}">${r.code}</option>`).join('');sel.value=prev;
+  const fl=ma().filter(m=>(!tf||m.type===tf)&&(!rf||m.refId===rf)&&(!df||m.date===df)).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  document.getElementById('movs-list').innerHTML=fl.length?fl.map(m=>hHTML(m)).join(''):'<div class="empty-state"><div class="icon">📭</div><p>Sin movimientos</p></div>'}
+
+window.clearMovFilters=()=>{['mov-type-filter','mov-ref-filter','mov-date-filter'].forEach(x=>document.getElementById(x).value='');rMovs()};
+
+window.editMov=id=>{
+  const m=M[id];if(!m)return;
+  editMovId=id;document.getElementById('mov-modal-title').textContent='Editar Movimiento';
+  setMovType(m.type);
+  document.getElementById('mov-qty').value=m.qty;
+  document.getElementById('mov-date').value=m.date;
+  document.getElementById('mov-doc').value=m.doc||'';
+  document.getElementById('mov-notes').value=m.notes||'';
+  document.getElementById('mov-ref').innerHTML='<option value="">Seleccionar referencia...</option>'+ra().map(r=>`<option value="${r.id}"${r.id===m.refId?' selected':''}>${r.code} – ${r.desc} (Stock: ${r.stock})</option>`).join('');
+  document.getElementById('mov-stock-preview').style.display='none';
+  openModal('modal-mov')};
+
+window.deleteMov=async id=>{
+  if(!confirm('¿Eliminar este movimiento? El stock se revertirá.'))return;
+  const m=M[id];if(!m)return;
+  const r=R[m.refId];
+  if(r){const rev=m.type==='entrada'?r.stock-m.qty:r.stock+m.qty;await fu('refs/'+m.refId,{stock:rev});}
+  await fr('movements/'+id);toast('Movimiento eliminado','error')};
+
+function rInv(){
+  const ar=ra(),ok=ar.filter(r=>r.stock>0).length,lo=ar.filter(r=>r.stock===0).length,ze=ar.filter(r=>r.stock<0).length;
+  document.getElementById('inv-status-chips').innerHTML=`<div class="inv-chip"><span class="dot" style="background:var(--blue)"></span>${ar.length} Referencias</div><div class="inv-chip"><span class="dot" style="background:var(--green)"></span>${ok} Con stock</div><div class="inv-chip"><span class="dot" style="background:var(--yellow)"></span>${lo} Sin stock</div><div class="inv-chip"><span class="dot" style="background:var(--accent)"></span>${ze} Negativos</div>`;
+  const lm=rid=>{const m=ma().filter(x=>x.refId===rid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''))[0];return m?m.date:'-'};
+  document.getElementById('inv-tbody').innerHTML=ar.length?ar.map(r=>{const pct=r.stock<0?0:r.minStock>0?Math.min(100,(r.stock/r.minStock)*100):100,col=r.stock<0?'var(--accent)':r.stock===0?'var(--yellow)':'var(--green)';return`<tr><td data-label="Ref"><span style="font-family:var(--font-mono);font-weight:700">${r.code}</span></td><td data-label="Descripción">${r.desc}</td><td data-label="Categoría"><span class="badge badge-blue">${r.cat||'-'}</span></td><td data-label="Stock" style="font-family:var(--font-mono);font-weight:700;color:${col};font-size:16px">${r.stock}</td><td data-label="Mínimo" style="font-family:var(--font-mono)">${r.minStock}</td><td data-label="Nivel"><div style="min-width:80px"><div style="font-size:10px;color:${col};font-family:var(--font-mono);margin-bottom:3px">${Math.round(pct)}%</div><div class="stock-bar"><div class="stock-bar-fill" style="width:${pct}%;background:${col}"></div></div></div></td><td data-label="Últ.Mov" style="font-family:var(--font-mono);font-size:12px;color:var(--text3)">${lm(r.id)}</td></tr>`}).join(''):`<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:40px">Sin referencias</td></tr>`}
+
+function rAlerts(){const lo=ra().filter(r=>r.stock<0).sort((a,b)=>a.stock-b.stock);document.getElementById('alerts-body').innerHTML=lo.length?lo.map(r=>`<div style="display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid var(--border)"><div style="width:40px;height:40px;background:rgba(227,38,30,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px">📋</div><div style="flex:1"><div style="font-weight:700;font-family:var(--font-mono)">${r.code}</div><div style="font-size:12px;color:var(--text2)">${r.desc}</div><div style="font-size:11px;color:var(--accent);margin-top:3px">Deuda: deben ${Math.abs(r.stock)} ud.</div></div><div style="text-align:right"><div style="font-size:22px;font-weight:800;color:var(--accent);font-family:var(--font-mono)">${r.stock}</div><div style="font-size:11px;color:var(--text3)">${r.cat||'-'}</div></div><button class="btn btn-primary btn-sm" onclick="openMovModalForRef('${r.id}');navigate('movimientos')">Regularizar</button></div>`).join(''):'<div class="empty-state"><div class="icon">✅</div><p>Sin deudas de stock</p></div>'}
+
+function rCfg(){document.getElementById('cfg-warehouse-name').value=C.name||'';document.getElementById('cfg-min-stock').value=C.defaultMin||5}
+
+window.saveConfig=async()=>{C.name=document.getElementById('cfg-warehouse-name').value;C.defaultMin=parseInt(document.getElementById('cfg-min-stock').value)||5;document.getElementById('warehouse-name-label').textContent=C.name;await fw('config',C)};
+
+window.clearAllData=async()=>{if(!confirm('⚠️ ¿Borrar TODOS los datos?'))return;await fr('refs');await fr('movements');toast('Datos borrados','error')};
+
+window.exportCSV=()=>{const rows=[['Tipo','Referencia','Descripción','Cantidad','Fecha','Albarán','Notas']];ma().forEach(m=>{const r=ra().find(x=>x.id===m.refId);rows.push([m.type,r?.code||'',r?.desc||'',m.qty,m.date,m.doc||'',m.notes||''])});const csv=rows.map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');dl('movimientos_'+new Date().toISOString().slice(0,10)+'.csv','data:text/csv;charset=utf-8,'+encodeURIComponent(csv));toast('CSV exportado ✅','success')};
+
+window.exportJSON=()=>{dl('backup_'+new Date().toISOString().slice(0,10)+'.json','data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify({refs:R,movements:M,config:C},null,2)));toast('Backup exportado ✅','success')};
+
+const dl=(n,u)=>{const a=document.createElement('a');a.href=u;a.download=n;a.click()};
+
+window.globalSearch=q=>{if(!q)return;navigate('referencias');document.getElementById('ref-filter').value=q;rRefs()};
+window.openModal=id=>document.getElementById(id).classList.add('open');
+window.closeModal=id=>document.getElementById(id).classList.remove('open');
+document.querySelectorAll('.modal-overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+
+window.toast=(msg,type='success')=>{const el=document.createElement('div');el.className='toast '+type;el.textContent=msg;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.remove(),3000)};
+window.rRefs=rRefs;
+window.rMovs=rMovs;
+window.editMov=editMov;
+window.deleteMov=deleteMov;
+
+init();
+</script>
+</body>
+</html>
